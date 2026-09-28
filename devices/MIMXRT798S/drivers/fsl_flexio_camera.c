@@ -1,0 +1,270 @@
+/*
+ * Copyright (c) 2015, Freescale Semiconductor, Inc.
+ * Copyright 2016-2020, 2025, 2026 NXP
+ * All rights reserved.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+#include "fsl_flexio_camera.h"
+
+/* Component ID definition, used by tools. */
+#ifndef FSL_COMPONENT_ID
+#define FSL_COMPONENT_ID "platform.drivers.flexio_camera"
+#endif
+
+/*******************************************************************************
+ * Prototypes
+ ******************************************************************************/
+
+/*******************************************************************************
+ * Variables
+ ******************************************************************************/
+
+/*******************************************************************************
+ * Codes
+ ******************************************************************************/
+
+static uint32_t FLEXIO_CAMERA_GetInstance(FLEXIO_CAMERA_Type *base)
+{
+    return FLEXIO_GetInstance(base->flexioBase);
+}
+
+
+/*!
+ * brief Gets the default configuration to configure the FlexIO Camera. The configuration
+ * can be used directly for calling the FLEXIO_CAMERA_Init().
+ * Example:
+   code
+   flexio_camera_config_t config;
+   FLEXIO_CAMERA_GetDefaultConfig(&userConfig);
+   endcode
+ * param config Pointer to the flexio_camera_config_t structure
+*/
+void FLEXIO_CAMERA_GetDefaultConfig(flexio_camera_config_t *config)
+{
+    assert(config != NULL);
+
+    /* Initializes the configure structure to zero. */
+    (void)memset(config, 0, sizeof(*config));
+
+    config->enablecamera     = false;
+#if !(defined(FSL_FEATURE_FLEXIO_HAS_DOZE_MODE_SUPPORT) && (FSL_FEATURE_FLEXIO_HAS_DOZE_MODE_SUPPORT == 0))
+    config->enableInDoze     = false;
+#endif
+    config->enableInDebug    = false;
+    config->enableFastAccess = false;
+}
+
+/*!
+ * brief Ungates the FlexIO clock, resets the FlexIO module, and configures the FlexIO Camera.
+ *
+ * param base Pointer to FLEXIO_CAMERA_Type structure
+ * param config Pointer to flexio_camera_config_t structure
+ */
+void FLEXIO_CAMERA_Init(FLEXIO_CAMERA_Type *base, const flexio_camera_config_t *config)
+{
+    assert((base != NULL) && (config != NULL));
+    assert(base->shifterCount > 0U);
+    assert(base->shifterCount <= (uint32_t)FLEXIO_SHIFTCTL_COUNT);
+    assert((uint32_t)base->shifterStartIdx < (uint32_t)FLEXIO_SHIFTCTL_COUNT);
+    assert(((uint32_t)base->shifterStartIdx + base->shifterCount) <= (uint32_t)FLEXIO_SHIFTCTL_COUNT);
+    assert(base->timerIdx < (uint32_t)FLEXIO_TIMCFG_COUNT);
+
+    if ((base->shifterCount == 0U) || (base->shifterCount > (uint32_t)FLEXIO_SHIFTCTL_COUNT) ||
+        (((uint32_t)base->shifterStartIdx + base->shifterCount) > (uint32_t)FLEXIO_SHIFTCTL_COUNT) ||
+        (base->timerIdx >= (uint32_t)FLEXIO_TIMCFG_COUNT))
+    {
+        return;
+    }
+
+    uint32_t i                   = 0U;
+    volatile uint32_t controlVal = 0U;
+
+#if !(defined(FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL) && FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL)
+    /* Ungate flexio clock. */
+    CLOCK_EnableClock(s_flexioClocks[FLEXIO_CAMERA_GetInstance(base)]);
+#endif /* FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL */
+
+    flexio_shifter_config_t shifterConfig;
+    flexio_timer_config_t timerConfig;
+
+    /* Clear the shifterConfig & timerConfig struct. */
+    (void)memset(&shifterConfig, 0, sizeof(shifterConfig));
+    (void)memset(&timerConfig, 0, sizeof(timerConfig));
+
+    /* Configure flexio camera */
+    controlVal = base->flexioBase->CTRL;
+#if !(defined(FSL_FEATURE_FLEXIO_HAS_DOZE_MODE_SUPPORT) && (FSL_FEATURE_FLEXIO_HAS_DOZE_MODE_SUPPORT == 0))
+    controlVal &=
+        ~(FLEXIO_CTRL_DOZEN_MASK | FLEXIO_CTRL_DBGE_MASK | FLEXIO_CTRL_FASTACC_MASK | FLEXIO_CTRL_FLEXEN_MASK);
+#else
+    controlVal &=
+        ~(FLEXIO_CTRL_DBGE_MASK | FLEXIO_CTRL_FASTACC_MASK | FLEXIO_CTRL_FLEXEN_MASK);
+#endif
+    controlVal |= (FLEXIO_CTRL_DBGE(config->enableInDebug ? 1U : 0U) |
+                   FLEXIO_CTRL_FASTACC(config->enableFastAccess ? 1U : 0U) |
+                   FLEXIO_CTRL_FLEXEN(config->enablecamera ? 1U : 0U));
+#if !(defined(FSL_FEATURE_FLEXIO_HAS_DOZE_MODE_SUPPORT) && (FSL_FEATURE_FLEXIO_HAS_DOZE_MODE_SUPPORT == 0))
+    if (!config->enableInDoze)
+    {
+        controlVal |= FLEXIO_CTRL_DOZEN_MASK;
+    }
+#endif
+    base->flexioBase->CTRL = controlVal;
+
+    /* FLEXIO_CAMERA shifter config */
+    shifterConfig.timerSelect   = base->timerIdx;
+    shifterConfig.timerPolarity = kFLEXIO_ShifterTimerPolarityOnPositive;
+    shifterConfig.pinConfig     = kFLEXIO_PinConfigOutputDisabled;
+    shifterConfig.pinSelect     = base->datPinStartIdx;
+    shifterConfig.pinPolarity   = kFLEXIO_PinActiveHigh;
+    shifterConfig.shifterMode   = kFLEXIO_ShifterModeReceive;
+    shifterConfig.parallelWidth = FLEXIO_CAMERA_PARALLEL_DATA_WIDTH - 1U;
+    shifterConfig.inputSource   = kFLEXIO_ShifterInputFromNextShifterOutput;
+    shifterConfig.shifterStop   = kFLEXIO_ShifterStopBitDisable;
+    shifterConfig.shifterStart  = kFLEXIO_ShifterStartBitDisabledLoadDataOnEnable;
+    /* Configure the shifters as FIFO buffer. */
+    for (i = base->shifterStartIdx; i < (base->shifterStartIdx + base->shifterCount - 1U); i++)
+    {
+        FLEXIO_SetShifterConfig(base->flexioBase, (uint8_t)i, &shifterConfig);
+    }
+    shifterConfig.inputSource = kFLEXIO_ShifterInputFromPin;
+    FLEXIO_SetShifterConfig(base->flexioBase, (uint8_t)i, &shifterConfig);
+
+#if defined(FLEXIO_SHIFTCFG_LATST_MASK)
+    /* On devices where the timer compare fires on the same clock edge as the final shift
+     * LATST=0 (default) causes every shifter to store its pre-shift state, missing the last
+     * byte captured in each shifter. Shifter[shifterStartIdx] is the last in the chain
+     * so it only starts filling at shift (32-count+1); with LATST=0 its [7:0] slot is still 0x00.
+     * Set LATST=1 (post-shift store) for all shifters so each captures a complete word. */
+    for (i = base->shifterStartIdx; i < (base->shifterStartIdx + base->shifterCount); i++)
+    {
+        base->flexioBase->SHIFTCFG[i] |= FLEXIO_SHIFTCFG_LATST_MASK;
+    }
+#endif /* FLEXIO_SHIFTCFG_LATST_MASK */
+
+    /* FLEXIO_CAMERA timer config, the PCLK's clk is source of timer to drive the shifter, the HREF is the selecting
+     * signal for available data. */
+    timerConfig.triggerSelect   = FLEXIO_TIMER_TRIGGER_SEL_PININPUT(base->hrefPinIdx);
+    timerConfig.triggerPolarity = kFLEXIO_TimerTriggerPolarityActiveHigh;
+    timerConfig.triggerSource   = kFLEXIO_TimerTriggerSourceInternal;
+    timerConfig.pinConfig       = kFLEXIO_PinConfigOutputDisabled;
+    timerConfig.pinSelect       = base->pclkPinIdx;
+    timerConfig.pinPolarity     = kFLEXIO_PinActiveHigh;
+    timerConfig.timerMode       = kFLEXIO_TimerModeSingle16Bit;
+    timerConfig.timerOutput     = kFLEXIO_TimerOutputZeroNotAffectedByReset;
+    timerConfig.timerDecrement  = kFLEXIO_TimerDecSrcOnPinInputShiftPinInput;
+    timerConfig.timerReset      = kFLEXIO_TimerResetOnTimerTriggerRisingEdge;
+    timerConfig.timerDisable    = kFLEXIO_TimerDisableOnTriggerFallingEdge;
+    timerConfig.timerEnable     = kFLEXIO_TimerEnableOnTriggerRisingEdge;
+    timerConfig.timerStop       = kFLEXIO_TimerStopBitDisabled;
+    timerConfig.timerStart      = kFLEXIO_TimerStartBitDisabled;
+    timerConfig.timerCompare    = 8U * base->shifterCount - 1U;
+
+    uint32_t shifterMask;
+
+    FLEXIO_SetTimerConfig(base->flexioBase, (uint8_t)base->timerIdx, &timerConfig);
+    /* Clear flags. */
+    shifterMask = (((uint32_t)1UL << base->shifterCount) - 1UL) << base->shifterStartIdx;
+    FLEXIO_ClearShifterErrorFlags(base->flexioBase, shifterMask);
+    FLEXIO_ClearTimerStatusFlags(base->flexioBase, 1UL << base->timerIdx);
+}
+
+/*!
+ * brief Resets the FLEXIO_CAMERA shifer and timer config.
+ *
+ * note After calling this API, call FLEXO_CAMERA_Init to use the FlexIO Camera module.
+ *
+ * param base Pointer to FLEXIO_CAMERA_Type structure
+ */
+void FLEXIO_CAMERA_Deinit(FLEXIO_CAMERA_Type *base)
+{
+    base->flexioBase->SHIFTCFG[base->shifterStartIdx] = 0;
+    base->flexioBase->SHIFTCTL[base->shifterStartIdx] = 0;
+    base->flexioBase->TIMCFG[base->timerIdx]          = 0;
+    base->flexioBase->TIMCMP[base->timerIdx]          = 0;
+    base->flexioBase->TIMCTL[base->timerIdx]          = 0;
+    /* Clear the shifter flag. */
+    base->flexioBase->SHIFTSTAT = (1UL << base->shifterStartIdx);
+    /* Clear the timer flag. */
+    base->flexioBase->TIMSTAT = (1UL << base->timerIdx);
+}
+
+/*!
+ * brief Gets the FlexIO Camera status flags.
+ *
+ * param base Pointer to FLEXIO_CAMERA_Type structure
+ * return FlexIO shifter status flags
+ *          arg FLEXIO_SHIFTSTAT_SSF_MASK
+ *          arg 0
+ */
+uint32_t FLEXIO_CAMERA_GetStatusFlags(FLEXIO_CAMERA_Type *base)
+{
+    uint32_t status = 0U;
+
+    if ((base->shifterCount == 0U) || (base->shifterCount > (uint32_t)FLEXIO_SHIFTCTL_COUNT))
+    {
+        return 0U;
+    }
+
+    status = ((FLEXIO_GetShifterStatusFlags(base->flexioBase) >> base->shifterStartIdx) &
+              (((uint32_t)1UL << base->shifterCount) - 1UL));
+    return status;
+}
+
+/*!
+ * brief Clears the receive buffer full flag manually.
+ *
+ * param base Pointer to the device.
+ * param mask status flag
+ *      The parameter can be any combination of the following values:
+ *          arg kFLEXIO_CAMERA_RxDataRegFullFlag
+ *          arg kFLEXIO_CAMERA_RxErrorFlag
+ */
+void FLEXIO_CAMERA_ClearStatusFlags(FLEXIO_CAMERA_Type *base, uint32_t mask)
+{
+    assert(base != NULL);
+    assert(base->shifterCount > 0U);
+    assert(base->shifterCount <= (uint32_t)FLEXIO_SHIFTCTL_COUNT);
+
+    if ((base == NULL) || (base->shifterCount == 0U) || (base->shifterCount > 31U) ||
+        (base->shifterCount > (uint32_t)FLEXIO_SHIFTCTL_COUNT))
+    {
+        return;
+    }
+
+    if ((mask & (uint32_t)kFLEXIO_CAMERA_RxDataRegFullFlag) != 0U)
+    {
+        uint32_t shifterMask = ((uint32_t)1U << base->shifterCount) - 1U;
+        shifterMask <<= base->shifterStartIdx;
+        FLEXIO_ClearShifterStatusFlags(base->flexioBase, shifterMask);
+    }
+    if ((mask & (uint32_t)kFLEXIO_CAMERA_RxErrorFlag) != 0U)
+    { /* Clear error flags if they are asserted to make sure the buffer would be available. */
+        uint32_t shifterMask = ((uint32_t)1U << base->shifterCount) - 1U;
+        shifterMask <<= base->shifterStartIdx;
+        FLEXIO_ClearShifterErrorFlags(base->flexioBase, shifterMask);
+    }
+}
+
+/*!
+ * brief Switches on the interrupt for receive buffer full event.
+ *
+ * param base Pointer to the device.
+ */
+void FLEXIO_CAMERA_EnableInterrupt(FLEXIO_CAMERA_Type *base)
+{
+    FLEXIO_EnableShifterStatusInterrupts(base->flexioBase, 1UL << (base->shifterStartIdx));
+}
+
+/*!
+ * brief Switches off the interrupt for receive buffer full event.
+ *
+ * param base Pointer to the device.
+ *
+ */
+void FLEXIO_CAMERA_DisableInterrupt(FLEXIO_CAMERA_Type *base)
+{
+    FLEXIO_DisableShifterStatusInterrupts(base->flexioBase, 1UL << (base->shifterStartIdx));
+}
