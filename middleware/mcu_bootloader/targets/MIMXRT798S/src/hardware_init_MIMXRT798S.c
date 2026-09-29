@@ -87,6 +87,11 @@ void LP_FLEXCOMM0_IRQHandler(void)
 // Hardware init / boot helpers
 ////////////////////////////////////////////////////////////////////////////////
 
+void update_memory_map_lpc_sram(void)
+{
+
+}
+
 //! @brief Initialize board hardware (clocks, pins, AHB secure controller).
 void init_hardware(void)
 {

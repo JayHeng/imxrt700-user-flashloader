@@ -39,18 +39,19 @@ enum
 //!
 //! property_imx.c refers to kIndexITCM / kIndexDTCM / kIndexOCRAM. In this
 //! trimmed RT700 map we expose three internal SRAM windows in that order.
-enum
+//! @brief Memory Map index constants
+enum _special_memorymap_constants
 {
-    kIndexSRAM_Code = 0, // aliased as ITCM below
-    kIndexSRAM_Data = 1, // aliased as DTCM below
-    kIndexSRAM_Ext = 2,  // aliased as OCRAM below
-};
+    // kIndexFlashArray = 0,
+    kIndexSRAM = 1,
+    kIndexSRAMX = 2,
+    kIndexSRAM1 = 3,
+    kIndexSRAM2 = 4,
+    kIndexSRAM3 = 5,
 
-enum
-{
-    kIndexITCM = kIndexSRAM_Code,
-    kIndexDTCM = kIndexSRAM_Data,
-    kIndexOCRAM = kIndexSRAM_Ext,
+    kRAMSections = 5,
+
+    // kSRAMSeparatrix = (uint32_t)0x20000000 //!< This value is the start address of SRAM_U
 };
 
 //! @brief i.MX RT700 SOC System ID.

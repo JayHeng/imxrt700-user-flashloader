@@ -40,6 +40,22 @@ define symbol m_text_end         = 0x000FFFFF;
 define symbol m_data_start       = 0x20180000;
 define symbol m_data_end         = 0x201FFFFF;
 
+if (isdefinedsymbol(__use_shmem__)) {
+  define exported symbol rpmsg_sh_mem_start      = 0x20200000;
+  define exported symbol rpmsg_sh_mem_end        = 0x20201FFF;
+  define symbol m_ncache_start                   = 0x20202000;
+  define symbol m_ncache_end                     = 0x203FFFFF;
+  define exported symbol __NCACHE_REGION_START   = m_ncache_start;
+  define exported symbol __NCACHE_REGION_SIZE    = m_ncache_end - __NCACHE_REGION_START + 1;
+}
+else
+{
+  define symbol m_ncache_start                   = 0x20200000;
+  define symbol m_ncache_end                     = 0x203FFFFF;
+  define exported symbol __NCACHE_REGION_START   = m_ncache_start;
+  define exported symbol __NCACHE_REGION_SIZE    = m_ncache_end - __NCACHE_REGION_START + 1;
+}
+
 define exported symbol __VECTOR_TABLE          = m_interrupts_start;
 define exported symbol __VECTOR_RAM            = m_interrupts_start;
 define exported symbol __RAM_VECTOR_TABLE_SIZE = 0x0;

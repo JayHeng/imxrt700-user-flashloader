@@ -51,7 +51,7 @@
 #define BL_TARGET_RAM (1)
 #endif
 
-#define BL_FEATURE_MIN_PROFILE (0)
+#define BL_FEATURE_MIN_PROFILE (1)
 
 // RAM target: no application CRC check / no jump-to-application.
 #if !defined(BL_TARGET_RAM)
