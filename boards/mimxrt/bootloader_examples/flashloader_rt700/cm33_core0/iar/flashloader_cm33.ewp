@@ -2857,7 +2857,7 @@
             <name>$PROJ_DIR$\..\..\..\..\..\..\middleware\mcu_bootloader\targets\MIMXRT798S\src\memory_map_MIMXRT798S.c</name>
         </file>
         <file>
-            <name>$PROJ_DIR$\..\..\..\..\..\..\middleware\mcu_bootloader\targets\MIMXRT798S\src\microseconds_dwt_MIMXRT798S.c</name>
+            <name>$PROJ_DIR$\..\..\..\..\..\..\middleware\mcu_bootloader\src\drivers\microseconds\src\microseconds_sysclk.c</name>
         </file>
         <file>
             <name>$PROJ_DIR$\..\..\..\..\..\..\middleware\mcu_bootloader\src\memory\src\normal_memory.c</name>
