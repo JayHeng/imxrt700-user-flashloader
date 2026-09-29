@@ -382,6 +382,7 @@
                     <state>$PROJ_DIR$/../../../../../../components/lists</state>
                     <state>$PROJ_DIR$/../../../../../../middleware/mcu_bootloader/src</state>
                     <state>$PROJ_DIR$/../../../../../../middleware/mcu_bootloader/src/include</state>
+                    <state>$PROJ_DIR$/../../../../../../middleware/mcu_bootloader/src/autobaud</state>
                     <state>$PROJ_DIR$/../../../../../../middleware/mcu_bootloader/src/bootloader</state>
                     <state>$PROJ_DIR$/../../../../../../middleware/mcu_bootloader/src/packet</state>
                     <state>$PROJ_DIR$/../../../../../../middleware/mcu_bootloader/src/property</state>
@@ -694,6 +695,7 @@
                     <state>$PROJ_DIR$/../../../../../../components/osa/config</state>
                     <state>$PROJ_DIR$/../../../../../../components/lists</state>
                     <state>$PROJ_DIR$/../../../../../../middleware/mcu_bootloader/src/include</state>
+                    <state>$PROJ_DIR$/../../../../../../middleware/mcu_bootloader/src/autobaud</state>
                     <state>$PROJ_DIR$/../../../../../../middleware/mcu_bootloader/src/bootloader</state>
                     <state>$PROJ_DIR$/../../../../../../middleware/mcu_bootloader/src/packet</state>
                     <state>$PROJ_DIR$/../../../../../../middleware/mcu_bootloader/src/property</state>
@@ -1556,6 +1558,7 @@
                     <state>$PROJ_DIR$/../../../../../../components/lists</state>
                     <state>$PROJ_DIR$/../../../../../../middleware/mcu_bootloader/src</state>
                     <state>$PROJ_DIR$/../../../../../../middleware/mcu_bootloader/src/include</state>
+                    <state>$PROJ_DIR$/../../../../../../middleware/mcu_bootloader/src/autobaud</state>
                     <state>$PROJ_DIR$/../../../../../../middleware/mcu_bootloader/src/bootloader</state>
                     <state>$PROJ_DIR$/../../../../../../middleware/mcu_bootloader/src/packet</state>
                     <state>$PROJ_DIR$/../../../../../../middleware/mcu_bootloader/src/property</state>
@@ -1868,6 +1871,7 @@
                     <state>$PROJ_DIR$/../../../../../../components/osa/config</state>
                     <state>$PROJ_DIR$/../../../../../../components/lists</state>
                     <state>$PROJ_DIR$/../../../../../../middleware/mcu_bootloader/src/include</state>
+                    <state>$PROJ_DIR$/../../../../../../middleware/mcu_bootloader/src/autobaud</state>
                     <state>$PROJ_DIR$/../../../../../../middleware/mcu_bootloader/src/bootloader</state>
                     <state>$PROJ_DIR$/../../../../../../middleware/mcu_bootloader/src/packet</state>
                     <state>$PROJ_DIR$/../../../../../../middleware/mcu_bootloader/src/property</state>
@@ -2730,6 +2734,15 @@
             <name>$PROJ_DIR$\..\..\..\..\..\..\devices\MIMXRT798S\drivers\fsl_gpio.h</name>
         </file>
         <file>
+            <name>$PROJ_DIR$\..\..\..\..\..\..\devices\MIMXRT798S\drivers\fsl_inputmux.c</name>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\..\..\..\..\..\..\devices\MIMXRT798S\drivers\fsl_inputmux.h</name>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\..\..\..\..\..\..\devices\MIMXRT798S\drivers\fsl_inputmux_connections.h</name>
+        </file>
+        <file>
             <name>$PROJ_DIR$\..\..\..\..\..\..\devices\MIMXRT798S\drivers\fsl_iopctl.h</name>
         </file>
         <file>
@@ -2743,6 +2756,12 @@
         </file>
         <file>
             <name>$PROJ_DIR$\..\..\..\..\..\..\devices\MIMXRT798S\drivers\fsl_lpuart.h</name>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\..\..\..\..\..\..\devices\MIMXRT798S\drivers\fsl_pint.c</name>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\..\..\..\..\..\..\devices\MIMXRT798S\drivers\fsl_pint.h</name>
         </file>
         <file>
             <name>$PROJ_DIR$\..\..\..\..\..\..\devices\MIMXRT798S\drivers\fsl_power.c</name>
@@ -2765,6 +2784,12 @@
     </group>
     <group>
         <name>source</name>
+        <file>
+            <name>$PROJ_DIR$\..\..\..\..\..\..\middleware\mcu_bootloader\src\autobaud\autobaud.h</name>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\..\..\..\..\..\..\middleware\mcu_bootloader\src\autobaud\src\autobaud_irq.c</name>
+        </file>
         <file>
             <name>$PROJ_DIR$\..\..\..\..\..\..\middleware\mcu_bootloader\src\bootloader\src\bl_command.c</name>
         </file>

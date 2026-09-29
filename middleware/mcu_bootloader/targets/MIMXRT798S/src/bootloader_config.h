@@ -32,13 +32,10 @@
 
 #define BL_CONFIG_LPUART (BL_CONFIG_LPUART_0)
 
-// RT700 has no LPIT and the flashloader here uses a FIXED baud rate instead of
-// the ROM autobaud (which relies on GPIO edge timing + LPIT). Keep autobaud OFF.
-#define BL_FEATURE_UART_AUTOBAUD_IRQ (0)
-
-// Fixed ISP UART baud rate used when autobaud is disabled. The host must open
-// the port at this rate, e.g.  blhost -p COMx,115200 ...
-#define BL_FEATURE_UART_FIXED_BAUD (115200U)
+// UART autobaud via GPIO edge timing (PINT + INPUTMUX) driven by the DWT-based
+// microseconds timebase. This lets the host pick the baud rate, e.g.
+//   blhost -p COMx  (auto)   or   blhost -p COMx,115200
+#define BL_FEATURE_UART_AUTOBAUD_IRQ (1)
 
 // No SPI / USB in this trimmed build.
 #define BL_CONFIG_LPSPI (0)

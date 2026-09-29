@@ -3,15 +3,15 @@
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
- * Fixed-baud LPUART peripheral interface for the i.MX RT700 (MIMXRT798S)
+ * Autobaud-capable LPUART peripheral interface for the i.MX RT700 (MIMXRT798S)
  * CM33 core0 UART-only SRAM flashloader.
  *
- * The stock lpuart_peripheral_interface.c in the mcu_bootloader middleware
- * relies on the ROM autobaud detection which needs GPIO edge timing plus an
- * LPIT timebase. RT700 has no LPIT and this trimmed flashloader intentionally
- * avoids autobaud. Instead this file brings the LPUART up at a fixed baud rate
- * (BL_FEATURE_UART_FIXED_BAUD) and reports "active" as soon as a valid ping
- * framing byte is received.
+ * This mirrors the stock mcu_bootloader lpuart_peripheral_interface.c and the
+ * i.MX RT685 ram_flashloader implementation: the UART RX pin is first muxed as
+ * a GPIO and routed to PINT (through INPUTMUX) so the autobaud detector can
+ * measure the host's 0x5A 0xA6 ping edges. Once autobaud completes the LPUART
+ * is initialized at the detected baud rate and normal RX-interrupt operation
+ * begins.
  *
  * This file DEFINES g_lpuartControlInterface and g_lpuartByteInterface, so the
  * stock lpuart_peripheral_interface.c must NOT be added to the project.
@@ -21,6 +21,7 @@
 #include "bootloader_common.h"
 #include "bootloader_config.h"
 #include "bl_peripheral_interface.h"
+#include "autobaud.h"
 #include "serial_packet.h"
 #include "fsl_device_registers.h"
 #include "fsl_lpuart.h"
@@ -58,79 +59,87 @@ static bool g_lpuartInitStatus[FSL_FEATURE_SOC_LPUART_COUNT] = { false };
 
 static const uint32_t g_lpuartBaseAddr[] = LPUART_BASE_ADDRS;
 
-//! @brief Tracks whether the fixed-baud LPUART has been brought up yet.
-static bool s_lpuartConfigured = false;
-
 ////////////////////////////////////////////////////////////////////////////////
 // Code
 ////////////////////////////////////////////////////////////////////////////////
 
-//! @brief Configure the LPUART at the fixed baud rate and enable RX interrupt.
-static status_t configure_lpuart_fixed(uint32_t instance)
-{
-    lpuart_config_t userConfig;
-    uint32_t baseAddr = g_lpuartBaseAddr[instance];
-
-    LPUART_GetDefaultConfig(&userConfig);
-    userConfig.baudRate_Bps = BL_FEATURE_UART_FIXED_BAUD;
-    userConfig.enableTx = true;
-    userConfig.enableRx = true;
-
-    if (LPUART_Init((LPUART_Type *)baseAddr, &userConfig, get_uart_clock(instance)) != kStatus_Success)
-    {
-        return kStatus_Fail;
-    }
-
-    // Enable RX-full interrupt so bytes are pushed to the framing layer.
-    LPUART_EnableInterrupts((LPUART_Type *)baseAddr, kLPUART_RxDataRegFullInterruptEnable);
-    LPUART_SetSystemIRQ(instance, kPeripheralEnableIRQ);
-
-    g_lpuartInitStatus[instance] = true;
-    return kStatus_Success;
-}
-
-//! @brief Poll for activity.
-//!
-//! With autobaud disabled we simply configure the UART once (on the first
-//! poll) and then let the RX ISR feed bytes to the framing layer. Activity is
-//! reported by the framing packet layer once a valid ping is seen; here we
-//! just make sure the UART is running and return false so bl_main keeps
-//! pumping until a real host packet arrives. The framing layer flags the
-//! peripheral active through the byte-received callback.
+/*!
+ * @brief Drive autobaud detection for this UART instance.
+ *
+ * Called repeatedly from the peripheral-detection loop. Returns false while
+ * autobaud is still measuring; once the rate is known the LPUART is fully
+ * initialized, the pins are remuxed to peripheral mode, the RX interrupt is
+ * enabled and the detected ping is injected into the framing layer.
+ */
 static bool lpuart_poll_for_activity(const peripheral_descriptor_t *self)
 {
     uint32_t instance = self->instance;
 
-    if (!s_lpuartConfigured)
-    {
-        // Mux the pins for UART operation and bring up the controller.
-        self->pinmuxConfig(instance, kPinmuxType_Peripheral);
+    // Check for autobaud completion.
+    uint32_t baud = 0;
+    status_t autoBaudCompleted = autobaud_get_rate(instance, &baud);
 
-        if (configure_lpuart_fixed(instance) == kStatus_Success)
+    if (autoBaudCompleted == kStatus_Success)
+    {
+        lpuart_config_t userConfig;
+        uint32_t baseAddr = g_lpuartBaseAddr[instance];
+
+        LPUART_GetDefaultConfig(&userConfig);
+        userConfig.baudRate_Bps = baud;
+        userConfig.enableTx = true;
+        userConfig.enableRx = true;
+
+        if (LPUART_Init((LPUART_Type *)baseAddr, &userConfig, get_uart_clock(instance)) == kStatus_Success)
         {
-            s_lpuartConfigured = true;
+            // Switch the RX/TX pins from the autobaud GPIO mode to UART mode.
+            self->pinmuxConfig(instance, kPinmuxType_Peripheral);
+
+            // Enable the LP_FLEXCOMM system interrupt and the RX-full interrupt.
+            LPUART_SetSystemIRQ(instance, kPeripheralEnableIRQ);
+            LPUART_EnableInterrupts((LPUART_Type *)baseAddr, kLPUART_RxDataRegFullInterruptEnable);
+
+            LPUART_EnableRx((LPUART_Type *)baseAddr, true);
+            LPUART_EnableTx((LPUART_Type *)baseAddr, true);
+
+            // Feed the detected ping bytes to the command/framing layer.
+            s_lpuart_byte_receive_callback(kFramingPacketStartByte);
+            s_lpuart_byte_receive_callback(kFramingPacketType_Ping);
+
+            g_lpuartInitStatus[instance] = true;
+
+            // Autobaud is complete and the UART is active.
+            return true;
         }
-        return false;
+        else
+        {
+            // Init failed, restart autobaud.
+            autobaud_init(instance);
+        }
     }
 
-    // Activity is detected via the framing layer (byte receive callback).
-    // Returning the framing layer's active status lets bl_main proceed.
     return false;
 }
 
-//! @brief Initialize the peripheral for activity detection.
+/*!
+ * @brief Prepare the peripheral for autobaud activity detection.
+ *
+ * Muxes the RX pin as a GPIO routed to PINT and starts the autobaud edge
+ * detector. The LPUART clock gate is not ungated until autobaud completes.
+ */
 static status_t lpuart_full_init(const peripheral_descriptor_t *self, serial_byte_receive_func_t function)
 {
     s_lpuart_byte_receive_callback = function;
-    s_lpuartConfigured = false;
 
-    // Pre-mux the pins so the line idles correctly before configuration.
+    // Configure the RX pin as a GPIO edge source for autobaud detection.
     self->pinmuxConfig(self->instance, kPinmuxType_PollForActivity);
+
+    // Init the autobaud detector (installs the pin IRQ callback).
+    autobaud_init(self->instance);
 
     return kStatus_Success;
 }
 
-//! @brief Shut down the peripheral.
+//! @brief Shut down the peripheral and (optionally) restore pins.
 static void lpuart_full_shutdown(const peripheral_descriptor_t *self)
 {
     uint32_t instance = self->instance;
@@ -143,6 +152,12 @@ static void lpuart_full_shutdown(const peripheral_descriptor_t *self)
         g_lpuartInitStatus[instance] = false;
     }
 
+#if BL_FEATURE_UART_AUTOBAUD_IRQ
+    // De-init autobaud detector so the user app is not left with a stray IRQ.
+    autobaud_deinit(instance);
+#endif
+
+    // Restore the pins to their default (reset) state.
     self->pinmuxConfig(self->instance, kPinmuxType_Default);
 }
 
